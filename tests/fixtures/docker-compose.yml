@@ -1,0 +1,20 @@
+# Containers pra test_probe.py exercitar sockets/TLS/HTTP de verdade, não
+# dicts de evidência sintéticos (isso quem cobre é test_classify.py).
+# Windows/VMware/RDP de verdade não são containerizáveis -- silent-port só
+# cobre o sinal "porta aberta sem banner" (RDP), o conteúdo de banner
+# real desses fica só coberto no nível unitário (ver README.md).
+#
+# Run from repo root: docker compose -f tests/fixtures/docker-compose.yml up -d --build --wait
+
+services:
+  sshd:
+    build: ./docker/sshd
+    container_name: invariant-discovery-test-sshd
+
+  http-waf-like:
+    build: ./docker/http-waf-like
+    container_name: invariant-discovery-test-http-waf-like
+
+  silent-port:
+    build: ./docker/silent-port
+    container_name: invariant-discovery-test-silent-port
