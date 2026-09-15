@@ -6,6 +6,7 @@ que eles significam.
 """
 
 import asyncio
+import errno
 import ssl
 from email import message_from_bytes
 
@@ -29,15 +30,36 @@ _READ_BYTES = 4096
 _CERT_VENDOR_KEYWORDS = [b"VMware", b"ESXi", b"vCenter", b"Fortinet", b"pfSense", b"Palo Alto Networks"]
 
 
+# Códigos fechados pra tentativa que não abriu -- nunca guardar
+# str(exception) cru na evidência pública (isso viraria contrato instável
+# e podia vazar detalhe interno). errno mapeado explicitamente pros casos
+# conhecidos; qualquer outro OSError (ou exceção inesperada de qualquer
+# tipo) cai em "error" em vez de propagar e derrubar o probe do host
+# inteiro.
+_STATUS_BY_ERRNO = {
+    errno.ECONNREFUSED: "refused",
+    errno.ENETUNREACH: "network_unreachable",
+    errno.EHOSTUNREACH: "host_unreachable",
+}
+
+
 async def probe_host(ip: str, *, semaphore: asyncio.Semaphore) -> dict:
-    """Returns {"open_ports": [int, ...], "banners": {"<port>": "<text>"}}."""
+    """Returns {"open_ports": [int, ...], "banners": {"<port>": "<text>"},
+    "port_attempts": [{"port": int, "status": str}, ...]}. `port_attempts`
+    só lista as portas que NÃO abriram (evita redundância com
+    open_ports) -- é a evidência real de que a porta foi de fato tentada,
+    e por que não respondeu (timeout/refused/network_unreachable/
+    host_unreachable/error), pra UI poder mostrar isso em vez de um
+    "não respondeu" genérico.
+    """
     results = await asyncio.gather(*(_probe_port(ip, port, semaphore) for port in PORTS))
-    open_ports = [port for port, _ in results if port is not None]
-    banners = {str(port): banner for port, banner in results if port is not None and banner}
-    return {"open_ports": open_ports, "banners": banners}
+    open_ports = [port for port, _, status in results if status == "open"]
+    banners = {str(port): banner for port, banner, status in results if status == "open" and banner}
+    port_attempts = [{"port": port, "status": status} for port, _, status in results if status != "open"]
+    return {"open_ports": open_ports, "banners": banners, "port_attempts": port_attempts}
 
 
-async def _probe_port(ip: str, port: int, semaphore: asyncio.Semaphore) -> tuple[int, str] | tuple[None, str]:
+async def _probe_port(ip: str, port: int, semaphore: asyncio.Semaphore) -> tuple[int, str, str]:
     async with semaphore:
         try:
             if port in _HTTP_PORTS:
@@ -48,9 +70,13 @@ async def _probe_port(ip: str, port: int, semaphore: asyncio.Semaphore) -> tuple
                 banner = await asyncio.wait_for(_probe_banner(ip, port), _CONNECT_TIMEOUT + _READ_TIMEOUT)
             else:
                 banner = await asyncio.wait_for(_probe_open(ip, port), _CONNECT_TIMEOUT)
-        except (asyncio.TimeoutError, OSError):
-            return None, ""
-    return port, banner
+        except asyncio.TimeoutError:
+            return port, "", "timeout"
+        except OSError as e:
+            return port, "", _STATUS_BY_ERRNO.get(e.errno, "error")
+        except Exception:
+            return port, "", "error"
+    return port, banner, "open"
 
 
 async def _probe_open(ip: str, port: int) -> str:
