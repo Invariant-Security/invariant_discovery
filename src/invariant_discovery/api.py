@@ -13,9 +13,10 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from invariant_discovery import classify, probe, ranges
+from invariant_discovery import classify, internal_auth, probe, ranges
 
 app = FastAPI(title="Invariant Discovery")
+internal_auth.install(app)
 
 # Limite de hosts sondados ao mesmo tempo -- não por CIDR, mas no total de
 # uma chamada (um /24 inteiro cabe tranquilo, um /20 também).
