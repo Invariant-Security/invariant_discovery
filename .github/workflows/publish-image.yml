@@ -1,11 +1,23 @@
 # Net-new capacidade de CI, ver o mesmo comentário em invariant_api's
 # publish-image.yml -- publica a imagem que docker-compose.appliance.yml
 # referencia via `image:`.
+#
+# Dois caminhos:
+#  - push de tag v*: tags da versão e `latest` (como sempre).
+#  - workflow_run do `ci` em dev/main: uma imagem por commit, tag
+#    <branch>-<sha>, construída aqui no GitHub (nunca na VPS) para o k8s
+#    puxar por digest. Mesmas travas dos deploy*.yml.
+# Atenção: o GitHub usa a versão DESTE arquivo que está na branch padrão
+# (main) para o gatilho workflow_run.
 name: publish-image
 
 on:
   push:
     tags: ["v*"]
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [dev, main]
 
 permissions:
   contents: read
@@ -14,17 +26,26 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'push' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - id: build
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/invariant-security/invariant-discovery:${{ github.ref_name }}
-            ghcr.io/invariant-security/invariant-discovery:latest
+            ${{ github.event_name == 'workflow_run' && format('ghcr.io/invariant-security/invariant-discovery:{0}-{1}', github.event.workflow_run.head_branch, github.event.workflow_run.head_sha) || format('ghcr.io/invariant-security/invariant-discovery:{0}', github.ref_name) }}
+            ${{ github.event_name != 'workflow_run' && 'ghcr.io/invariant-security/invariant-discovery:latest' || '' }}
+      - run: echo "ghcr.io/invariant-security/invariant-discovery@${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
