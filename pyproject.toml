@@ -14,13 +14,15 @@ dependencies = [
 # is the only place a real invariant_contracts.DiscoveryResult gets built.
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio", "pytest-cov", "httpx2"]
+dev = ["pytest", "pytest-asyncio", "pytest-cov", "pytest-timeout", "httpx2"]
 
 [tool.pytest.ini_options]
 markers = [
     "integration: hits real listening sockets (test fixture containers) instead of synthetic evidence dicts",
 ]
 asyncio_mode = "auto"
+timeout = 300
+faulthandler_timeout = 120
 
 [build-system]
 requires = ["hatchling"]

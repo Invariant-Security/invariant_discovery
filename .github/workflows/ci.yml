@@ -12,9 +12,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     name: test
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -24,7 +29,7 @@ jobs:
       # Mesmo lock da imagem (Dockerfile); só as ferramentas de teste
       # (extra `dev`) continuam sem pin.
       - run: pip install --require-hashes --no-deps -r requirements.lock
-      - run: pip install --no-deps -e . && pip install pytest pytest-asyncio pytest-cov httpx2
+      - run: pip install --no-deps -e . && pip install pytest pytest-asyncio pytest-cov pytest-timeout httpx2
 
       - name: Build and start the fixture containers
         run: docker compose -f tests/fixtures/docker-compose.yml up -d --build --wait --wait-timeout 120
