@@ -23,8 +23,15 @@ permissions:
   contents: read
   packages: write
 
+# workflow_run roda com github.ref = branch padrão: sem o head_sha, publicações de
+# dev e main dividiriam o grupo e uma pendente seria descartada.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_sha || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   publish:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     if: >-
       github.event_name == 'push' ||
