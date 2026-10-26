@@ -35,6 +35,9 @@ jobs:
         run: docker compose -f tests/fixtures/docker-compose.yml up -d --build --wait --wait-timeout 120
 
       - run: pytest tests/ -q
+        env:
+          INVARIANT_ENVIRONMENT: ci
+          INVARIANT_ALLOW_LOOPBACK_TARGETS: "1"
 
       - name: Logs on failure
         if: failure()

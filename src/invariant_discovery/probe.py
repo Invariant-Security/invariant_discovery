@@ -10,6 +10,8 @@ import errno
 import ssl
 from email import message_from_bytes
 
+from invariant_discovery.netguard import check_target_ip
+
 # Portas reveladoras o bastante pra valer a pena sondar -- ver
 # classify.py pro porquê de cada uma.
 PORTS: list[int] = [22, 80, 443, 8443, 445, 3389, 902, 903, 2375, 2376]
@@ -52,6 +54,7 @@ async def probe_host(ip: str, *, semaphore: asyncio.Semaphore) -> dict:
     host_unreachable/error), pra UI poder mostrar isso em vez de um
     "não respondeu" genérico.
     """
+    check_target_ip(ip)  # antes de qualquer conexão
     results = await asyncio.gather(*(_probe_port(ip, port, semaphore) for port in PORTS))
     open_ports = [port for port, _, status in results if status == "open"]
     banners = {str(port): banner for port, banner, status in results if status == "open" and banner}

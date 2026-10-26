@@ -38,6 +38,13 @@ Only scan networks you own or are authorized to test.
   "scanned_at"}, ...]}`. It is synchronous, with no job queue; see the
   docstring in `api.py`.
 
+## Blocked targets (netguard)
+
+`POST /discover` refuses internal targets: 127.0.0.0/8, 0.0.0.0/8, 169.254.0.0/16 (cloud metadata), 224.0.0.0/4, 240.0.0.0/4, `::1`, `::`, `fe80::/10`, `ff00::/8` and `fd00:ec2::254`, including IPv4 embedded in IPv4-mapped, NAT64 (`64:ff9b::/96`) and 6to4 (`2002::/16`) addresses. A blocked single IP returns 422; inside a CIDR the blocked IPs are silently dropped. Customer RFC1918 ranges are allowed.
+
+- `INVARIANT_BLOCKED_CIDRS`: comma-separated CIDRs added to the fixed set. An invalid value stops the service from starting.
+- `INVARIANT_ALLOW_LOOPBACK_TARGETS=1`: allows only loopback (127/8, `::1`). Test/CI only: the service refuses to start unless `INVARIANT_ENVIRONMENT` is `test` or `ci`. No deploy needs to change; nobody sets it outside CI.
+
 ## Development
 
 ```bash
