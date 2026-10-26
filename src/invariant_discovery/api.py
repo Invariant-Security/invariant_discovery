@@ -8,15 +8,30 @@ justificado pela concorrência interna (asyncio.Semaphore) manter até um
 """
 
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from invariant_discovery import classify, internal_auth, probe, ranges
+from invariant_discovery import classify, internal_auth, netguard, probe, ranges
 
 app = FastAPI(title="Invariant Discovery")
 internal_auth.install(app)
+
+# Dentro do lifespan do app: CIDR inválido / liberação de loopback fora de
+# test/ci recusam a partida.
+_previous_lifespan = app.router.lifespan_context
+
+
+@asynccontextmanager
+async def _netguard_lifespan(a):
+    netguard.validate_startup()
+    async with _previous_lifespan(a) as state:
+        yield state
+
+
+app.router.lifespan_context = _netguard_lifespan
 
 # Limite de hosts sondados ao mesmo tempo -- não por CIDR, mas no total de
 # uma chamada (um /24 inteiro cabe tranquilo, um /20 também).
