@@ -39,3 +39,15 @@ def test_non_strict_host_bits_set_still_expands():
     hosts = expand("10.0.0.5/24")
 
     assert len(hosts) == 254
+
+
+@pytest.mark.parametrize("address", ["2001:db8::/64", "2001:db8::/115", "64:ff9b::/96", "2002::/16"])
+def test_ipv6_range_larger_than_limit_raises(address):
+    # Antes, o limite olhava só o prefixo: /64 > /20 passava e hosts()
+    # tentava enumerar 2**64 endereços.
+    with pytest.raises(RangeTooLargeError):
+        expand(address)
+
+
+def test_ipv6_range_within_limit_expands():
+    assert len(expand("2001:db8::/120")) == 255
